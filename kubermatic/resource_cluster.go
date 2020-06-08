@@ -127,8 +127,8 @@ func validateVersionExists() schema.CustomizeDiffFunc {
 		p := versions.NewGetMasterVersionsParams()
 		r, err := k.client.Versions.GetMasterVersions(p, k.auth)
 		if err != nil {
-			if e, ok := err.(*versions.GetMasterVersionsDefault); ok && e.Payload != nil && e.Payload.Error != nil && e.Payload.Error.Message != nil {
-				return fmt.Errorf("get cluster upgrades: %s", *e.Payload.Error.Message)
+			if e, ok := err.(*versions.GetMasterVersionsDefault); ok && errorMessage(e.Payload) != "" {
+				return fmt.Errorf("get cluster upgrades: %s", errorMessage(e.Payload))
 			}
 			return err
 		}
@@ -180,8 +180,8 @@ func resourceClusterCreate(d *schema.ResourceData, m interface{}) error {
 
 	r, err := k.client.Project.CreateCluster(p, k.auth)
 	if err != nil {
-		if e, ok := err.(*project.CreateClusterDefault); ok && e.Payload != nil && e.Payload.Error != nil && e.Payload.Error.Message != nil {
-			return fmt.Errorf("unable to create cluster for project '%s': %s", pID, *e.Payload.Error.Message)
+		if e, ok := err.(*project.CreateClusterDefault); ok && errorMessage(e.Payload) != "" {
+			return fmt.Errorf("unable to create cluster for project '%s': %s", pID, errorMessage(e.Payload))
 		}
 		return fmt.Errorf("unable to create cluster for project '%s': %s", pID, err)
 	}
@@ -233,8 +233,8 @@ func getDatacenterByName(k *kubermaticProviderMeta, name string) (*models.Datace
 	p := datacenter.NewListDatacentersParams()
 	r, err := k.client.Datacenter.ListDatacenters(p, k.auth)
 	if err != nil {
-		if e, ok := err.(*datacenter.ListDatacentersDefault); ok && e.Payload != nil && e.Payload.Error != nil && e.Payload.Error.Message != nil {
-			return nil, fmt.Errorf("list datacenters: %s", *e.Payload.Error.Message)
+		if e, ok := err.(*datacenter.ListDatacentersDefault); ok && errorMessage(e.Payload) != "" {
+			return nil, fmt.Errorf("list datacenters: %s", errorMessage(e.Payload))
 		}
 		return nil, fmt.Errorf("list datacenters: %v", err)
 	}
@@ -323,8 +323,7 @@ func getClusterErrResourceIsDeleted(err error) bool {
 
 	// All api replies and errors, that nevertheless indicate cluster was deleted.
 	// TODO: adjust when https://github.com/kubermatic/kubermatic/issues/5462 fixed
-	return (e.Code() == http.StatusNotFound ||
-		(e.Payload != nil && e.Payload.Error != nil && e.Payload.Error.Message != nil && *e.Payload.Error.Message == "no userInfo in request"))
+	return e.Code() == http.StatusNotFound || errorMessage(e.Payload) == "no userInfo in request"
 }
 
 // excludeProjectLabels excludes labels defined in project.
@@ -467,9 +466,9 @@ func patchClusterFields(d *schema.ResourceData, k *kubermaticProviderMeta) error
 		_, err := k.client.Project.PatchCluster(p, k.auth)
 		if err != nil {
 			if e, ok := err.(*project.PatchClusterDefault); ok && e.Code() == http.StatusConflict {
-				return resource.RetryableError(fmt.Errorf("cluster patch conflict: %w", err))
-			} else if ok && e.Payload != nil && e.Payload.Error != nil && e.Payload.Error.Message != nil {
-				return resource.NonRetryableError(fmt.Errorf("patch cluster '%s': %s", d.Id(), *e.Payload.Error.Message))
+				return resource.RetryableError(fmt.Errorf("cluster patch conflict: %v", err))
+			} else if ok && errorMessage(e.Payload) != "" {
+				return resource.NonRetryableError(fmt.Errorf("patch cluster '%s': %s", d.Id(), errorMessage(e.Payload)))
 			}
 			return resource.NonRetryableError(fmt.Errorf("patch cluster '%s': %v", d.Id(), err))
 		}
@@ -534,7 +533,7 @@ func assignSSHKeysToCluster(projectID, seedDC, clusterID string, sshkeyIDs []str
 		p.SetKeyID(id)
 		_, err := k.client.Project.AssignSSHKeyToCluster(p, k.auth)
 		if err != nil {
-			return fmt.Errorf("unable to assign sshkeys to cluster '%s': %w", clusterID, err)
+			return fmt.Errorf("unable to assign sshkeys to cluster '%s': %v", clusterID, err)
 		}
 	}
 
